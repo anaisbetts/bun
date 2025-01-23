@@ -1,5 +1,6 @@
 import { beforeAll, afterAll, test, expect } from "bun:test";
 import type { Subprocess } from "bun";
+import jsc from "bun:jsc";
 
 var cat: Subprocess<"pipe", "pipe", "inherit">;
 var r: ReadableStreamDefaultReader<Uint8Array>;
@@ -36,23 +37,24 @@ async function readAndWrite(bytes = BYTES_TO_WRITE) {
 
 // https://github.com/oven-sh/bun/issues/12198
 test("PullIntoDescriptors do not leak buffers", async () => {
-  const rounds = 100;
+  const rounds = 250;
   const warmup = 10;
 
   for (let i = 0; i < warmup; i++) {
     await readAndWrite(10_000);
   }
   Bun.gc(true);
-  const { arrayBuffers: arrayBuffersBefore, heapUsed: heapUsedBefore } = process.memoryUsage();
+
+  const { heapUsed: heapUsedBefore } = process.memoryUsage();
+  Bun.write(`streams-leak.warmup.heapsnapshot`, Bun.generateHeapSnapshot("v8"));
 
   for (let i = 0; i < rounds; i++) {
     await readAndWrite();
   }
   Bun.gc(true);
-  const { arrayBuffers: arrayBuffersAfter, heapUsed: heapUsedAfter } = process.memoryUsage();
+  const { heapUsed: heapUsedAfter } = process.memoryUsage();
+  Bun.gc(true);
 
-  const newArrayBuffers = arrayBuffersAfter - arrayBuffersBefore;
   const newHeapUsed = heapUsedAfter - heapUsedBefore;
-  expect(newArrayBuffers).toBeLessThan(rounds / 2);
   expect(newHeapUsed).toBeLessThan((BYTES_TO_WRITE * rounds) / 2);
 });

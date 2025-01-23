@@ -1014,8 +1014,17 @@ pub const Subprocess = struct {
         }
 
         pub fn readAll(this: *PipeReader) void {
-            if (this.state == .pending)
+            if (this.state == .pending) {
+                const capacity_before = this.reader.buffer().capacity;
                 this.reader.read();
+                // Inform the VM about allocations within this reader's buffer.
+                // Without this, the GC won't know it should sweep
+                const delta = this.reader.buffer().capacity - capacity_before;
+                if (delta > 0) {
+                    const vm = this.eventLoop().global.vm();
+                    vm.reportExtraMemory(delta);
+                }
+            }
         }
 
         pub fn start(this: *PipeReader, process: *Subprocess, event_loop: *JSC.EventLoop) JSC.Maybe(void) {

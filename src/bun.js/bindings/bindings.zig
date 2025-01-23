@@ -1936,6 +1936,10 @@ pub const JSCell = extern struct {
         }
         return @as(*CustomGetterSetter, @ptrCast(@alignCast(this)));
     }
+
+    pub fn reportAllocation(this: *JSCell, vm: *VM, size: usize) void {
+        vm.reportExtraMemoryAllocated(this, size);
+    }
 };
 
 pub const JSString = extern struct {
@@ -4969,6 +4973,14 @@ pub const JSValue = enum(i64) {
         return cppFn("toMatch", .{ this, global, other });
     }
 
+    /// Runtime conversion of `this` into some type of array buffer. Prefer
+    /// `asArrayBuffer` over this method.
+    /// 
+    /// - if `this` is of a type that can be converted (e.g. `Uint8ArrayType`
+    ///   et. al.), `out`'s properties are updated and this function returns
+    ///  `true`. No allocations occur and `out` borrows from `this`.
+    /// - if `this` cannot be converted, `out` is not touched and `false` is
+    ///   returned.
     pub fn asArrayBuffer_(this: JSValue, global: *JSGlobalObject, out: *ArrayBuffer) bool {
         return cppFn("asArrayBuffer_", .{ this, global, out });
     }
@@ -6281,6 +6293,12 @@ pub const VM = extern struct {
     pub fn reportExtraMemory(this: *VM, size: usize) void {
         JSC.markBinding(@src());
         JSC__VM__reportExtraMemory(this, size);
+    }
+
+    extern fn JSC__VM__reportExtraMemoryAllocated(*VM, *JSCell, usize) void; 
+    pub fn reportExtraMemoryAllocated(this: *VM, cell: *JSCell, size: usize) void {
+        JSC.markBinding(@src());
+        JSC__VM__reportExtraMemoryAllocated(this, cell, size);
     }
 
     pub fn deleteAllCode(
