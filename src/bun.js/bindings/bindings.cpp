@@ -1881,14 +1881,30 @@ void WebCore__DOMURL__pathname_(WebCore__DOMURL* domURL, ZigString* arg1)
     *arg1 = Zig::toZigString(pathname);
 }
 
-BunString WebCore__DOMURL__fileSystemPath(WebCore__DOMURL* arg0)
+BunString WebCore__DOMURL__fileSystemPath(WebCore__DOMURL* arg0, int* errorCode)
 {
     const WTF::URL& url = arg0->href();
     if (url.protocolIsFile()) {
+#if !OS(WINDOWS)
+        if (!url.host().isEmpty()) {
+            *errorCode = 1;
+            return BunString { BunStringTag::Dead, nullptr };
+        }
+#endif
+        if (url.path().containsIgnoringASCIICase("%2f"_s)) {
+            *errorCode = 2;
+            return BunString { BunStringTag::Dead, nullptr };
+        }
+#if OS(WINDOWS)
+        if (url.path().containsIgnoringASCIICase("%5c"_s)) {
+            *errorCode = 2;
+            return BunString { BunStringTag::Dead, nullptr };
+        }
+#endif
         return Bun::toStringRef(url.fileSystemPath());
     }
-
-    return BunStringEmpty;
+    *errorCode = 3;
+    return BunString { BunStringTag::Dead, nullptr };
 }
 
 extern "C" JSC__JSValue ZigString__toJSONObject(const ZigString* strPtr, JSC::JSGlobalObject* globalObject)
@@ -3266,7 +3282,7 @@ void JSC__JSPromise__resolve(JSC__JSPromise* arg0, JSC__JSGlobalObject* arg1,
     ASSERT_WITH_MESSAGE(arg0->inherits<JSC::JSPromise>(), "Argument is not a promise");
     ASSERT_WITH_MESSAGE(arg0->status(arg0->vm()) == JSC::JSPromise::Status::Pending, "Promise is already resolved or rejected");
     ASSERT(!target.isEmpty());
-    ASSERT_WITH_MESSAGE(arg0 != target, "Promise cannot be resoled to itself");
+    ASSERT_WITH_MESSAGE(arg0 != target, "Promise cannot be resolved to itself");
 
     // Note: the Promise can be another promise. Since we go through the generic promise resolve codepath.
     arg0->resolve(arg1, JSC::JSValue::decode(JSValue2));
@@ -3535,10 +3551,6 @@ bool JSC__JSValue__isBigInt(JSC__JSValue JSValue0)
 bool JSC__JSValue__isBigInt32(JSC__JSValue JSValue0)
 {
     return JSC::JSValue::decode(JSValue0).isBigInt32();
-}
-bool JSC__JSValue__isBoolean(JSC__JSValue JSValue0)
-{
-    return JSC::JSValue::decode(JSValue0).isBoolean();
 }
 
 void JSC__JSValue__put(JSC__JSValue JSValue0, JSC__JSGlobalObject* arg1, const ZigString* arg2, JSC__JSValue JSValue3)
@@ -3858,6 +3870,8 @@ JSC__JSValue JSC__JSValue__createObject2(JSC__JSGlobalObject* globalObject, cons
     return JSC::JSValue::encode(object);
 }
 
+// Returns empty for exception, returns deleted if not found.
+// Be careful when handling the return value.
 JSC__JSValue JSC__JSValue__getIfPropertyExistsImpl(JSC__JSValue JSValue0,
     JSC__JSGlobalObject* globalObject,
     const unsigned char* arg1, uint32_t arg2)
@@ -4073,6 +4087,17 @@ CPP_DECL double JSC__JSValue__coerceToDouble(JSC__JSValue JSValue0, JSC__JSGloba
         catchScope.clearException();
     }
 
+    return result;
+}
+CPP_DECL double Bun__JSValue__toNumber(JSC__JSValue JSValue0, JSC__JSGlobalObject* arg1, bool* had_exception)
+{
+    ASSERT_NO_PENDING_EXCEPTION(arg1);
+    auto catchScope = DECLARE_CATCH_SCOPE(arg1->vm());
+    double result = JSC::JSValue::decode(JSValue0).toNumber(arg1);
+    if (catchScope.exception()) {
+        *had_exception = true;
+        return PNaN;
+    }
     return result;
 }
 
@@ -5353,6 +5378,8 @@ JSC__JSValue JSC__JSValue__fastGetDirect_(JSC__JSValue JSValue0, JSC__JSGlobalOb
     return JSValue::encode(value.getObject()->getDirect(globalObject->vm(), PropertyName(builtinNameMap(globalObject->vm(), arg2))));
 }
 
+// Returns empty for exception, returns deleted if not found.
+// Be careful when handling the return value.
 JSC__JSValue JSC__JSValue__fastGet(JSC__JSValue JSValue0, JSC__JSGlobalObject* globalObject, unsigned char arg2)
 {
     JSC::JSValue value = JSC::JSValue::decode(JSValue0);
@@ -6345,4 +6372,30 @@ extern "C" EncodedJSValue Bun__JSObject__getCodePropertyVMInquiry(JSC::JSGlobalO
     }
 
     return JSValue::encode(slot.getPureResult());
+}
+
+using StackCodeType = JSC::StackVisitor::Frame::CodeType;
+CPP_DECL bool Bun__util__isInsideNodeModules(JSC::JSGlobalObject* globalObject, JSC::CallFrame* callFrame)
+{
+    JSC::VM& vm = globalObject->vm();
+    bool inNodeModules = false;
+    JSC::StackVisitor::visit(callFrame, vm, [&](JSC::StackVisitor& visitor) -> WTF::IterationStatus {
+        if (Zig::isImplementationVisibilityPrivate(visitor) || visitor->isNativeCalleeFrame()) {
+            return WTF::IterationStatus::Continue;
+        }
+
+        if (visitor->hasLineAndColumnInfo()) {
+            String sourceURL = Zig::sourceURL(visitor);
+            if (sourceURL.startsWith("node:"_s) || sourceURL.startsWith("bun:"_s))
+                return WTF::IterationStatus::Continue;
+            if (sourceURL.contains("node_modules"_s))
+                inNodeModules = true;
+
+            return WTF::IterationStatus::Done;
+        }
+
+        return WTF::IterationStatus::Continue;
+    });
+
+    return inNodeModules;
 }
