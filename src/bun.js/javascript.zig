@@ -1003,6 +1003,10 @@ pub const VirtualMachine = struct {
         return VMHolder.vm.?;
     }
 
+    pub inline fn tryGet() ?*VirtualMachine {
+        return VMHolder.vm;
+    }
+
     pub fn getMainThreadVM() ?*VirtualMachine {
         return VMHolder.main_thread_vm;
     }

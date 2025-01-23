@@ -5201,10 +5201,6 @@ void JSC__VM__reportExtraMemory(JSC__VM* arg0, size_t arg1)
 {
     arg0->heap.deprecatedReportExtraMemory(arg1);
 }
-void JSC__VM__reportExtraMemoryAllocated(JSC__VM* vm, JSC__JSCell* cell, size_t size)
-{
-    vm->heap.reportExtraMemoryAllocated(cell, size);
-}
 
 void JSC__VM__deinit(JSC__VM* arg1, JSC__JSGlobalObject* globalObject) {}
 void JSC__VM__drainMicrotasks(JSC__VM* arg0) { arg0->drainMicrotasks(); }

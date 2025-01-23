@@ -1019,10 +1019,11 @@ pub const Subprocess = struct {
                 this.reader.read();
                 // Inform the VM about allocations within this reader's buffer.
                 // Without this, the GC won't know it should sweep
-                const delta = this.reader.buffer().capacity - capacity_before;
-                if (delta > 0) {
-                    const vm = this.eventLoop().global.vm();
-                    vm.reportExtraMemory(delta);
+                if (JSC.VirtualMachine.tryGet()) |vm| {
+                    const delta = this.reader.buffer().capacity - capacity_before;
+                    if (delta > 0) {
+                        vm.jsc.reportExtraMemory(delta);
+                    }
                 }
             }
         }

@@ -1936,10 +1936,6 @@ pub const JSCell = extern struct {
         }
         return @as(*CustomGetterSetter, @ptrCast(@alignCast(this)));
     }
-
-    pub fn reportAllocation(this: *JSCell, vm: *VM, size: usize) void {
-        vm.reportExtraMemoryAllocated(this, size);
-    }
 };
 
 pub const JSString = extern struct {
@@ -6293,12 +6289,6 @@ pub const VM = extern struct {
     pub fn reportExtraMemory(this: *VM, size: usize) void {
         JSC.markBinding(@src());
         JSC__VM__reportExtraMemory(this, size);
-    }
-
-    extern fn JSC__VM__reportExtraMemoryAllocated(*VM, *JSCell, usize) void;
-    pub fn reportExtraMemoryAllocated(this: *VM, cell: *JSCell, size: usize) void {
-        JSC.markBinding(@src());
-        JSC__VM__reportExtraMemoryAllocated(this, cell, size);
     }
 
     pub fn deleteAllCode(

@@ -64,13 +64,12 @@ pub fn PosixPipeReader(
             // Inform the VM about allocations within this reader's buffer.
             // Without this, the GC won't know it should sweep
             const size_before = resizable_buffer.capacity;
-            defer {
+            defer if (JSC.VirtualMachine.tryGet()) |vm| {
                 const delta = resizable_buffer.capacity - size_before;
                 if (delta > 0) {
-                    const vm = JSC.VirtualMachine.get().jsc;
-                    vm.reportExtraMemory(delta);
+                    vm.jsc.reportExtraMemory(delta);
                 }
-            }
+            };
 
             switch (vtable.getFileType(parent)) {
                 .nonblocking_pipe => {
